@@ -1,0 +1,7 @@
+CREATE PRIMARY INDEX ON moviedata;
+#CREATE PRIMARY INDEX ON tweetsource;
+CREATE INDEX idx_type ON moviedata(type) WITH {"defer_build":true};
+CREATE INDEX idx_primaryName ON moviedata(type,primaryName,birthYear) WHERE type = "person" WITH {"defer_build":true};
+CREATE INDEX idx_castName ON moviedata((distinct (array (c.name) for c in `cast` end))) WHERE type = "movie" WITH {"defer_build":true};
+CREATE INDEX idx_movieTitle ON moviedata(type,title,revenue) WHERE type = "movie" WITH {"defer_build":true};
+BUILD INDEX ON moviedata(idx_type, idx_primaryName, idx_castName, idx_movieTitle) USING GSI;

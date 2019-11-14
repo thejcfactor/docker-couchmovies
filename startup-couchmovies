@@ -1,0 +1,77 @@
+#!/bin/bash
+
+WORKING_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+DB_CONTEXT=$WORKING_DIR/couchbase/
+API_CONTEXT=$WORKING_DIR/api/couchmovies/
+WEB_CONTEXT=$WORKING_DIR/web/
+
+DB_BUILD_NAME=cb-local
+DB_CONTAINER_NAME=couchmovies-db
+API_BUILD_NAME=api-local
+API_CONTAINER_NAME=couchmovies-api
+WEB_BUILD_NAME=web-local
+WEB_CONTAINER_NAME=couchmovies-web
+
+DOCKER_CMD=docker
+
+MAX_TRIES=10
+
+function couchbaseIsInitialized(){
+    $DOCKER_CMD logs $DB_CONTAINER_NAME | grep "SUCCESS: RBAC user set"
+}
+
+echo "Building Couchmovies Couchbase container..."
+
+$DOCKER_CMD build -t $DB_BUILD_NAME $DB_CONTEXT
+
+echo "Couchmovies Couchbase container built..."
+
+echo "Starting couchmovies Couchbase container..."
+
+$DOCKER_CMD run --rm --name $DB_CONTAINER_NAME -d -p 8091-8094:8091-8094 -p 11210-11211:11210-11211 $DB_BUILD_NAME
+
+count=1
+while [ $count -le $MAX_TRIES ]; do
+  init=$(couchbaseIsInitialized)
+  if [[ ! -z $init ]]; then
+    echo "$DB_CONTAINER_NAME is initialized."
+    break
+  fi
+  echo "Waiting for $DB_CONTAINER_NAME to initialize..."
+  ((count++))
+  sleep 15
+done
+
+if [ $count -gt $MAX_TRIES ]; then
+  echo "Error: $DB_CONTAINER_NAME could not initialize.  Exiting setup."
+  exit 1
+fi
+
+
+echo "Building couchmovies API container..."
+
+$DOCKER_CMD build -t $API_BUILD_NAME $API_CONTEXT
+
+echo "Couchmovies API container built..."
+
+echo "Building couchmovies web server container..."
+
+$DOCKER_CMD build -t $WEB_BUILD_NAME $WEB_CONTEXT
+
+echo "Couchmovies web server container built..."
+
+echo "Remote dangling images..."
+$DOCKER_CMD image prune -f
+
+echo "Starting couchmovies api container..."
+
+$DOCKER_CMD run --rm --name $API_CONTAINER_NAME -d -p 8080:8080 $API_BUILD_NAME
+
+echo "Starting couchmovies web server container..."
+
+$DOCKER_CMD run --rm --name $WEB_CONTAINER_NAME -d -p 8000:8000 $WEB_BUILD_NAME
+
+echo "Opening couchmovies url..."
+
+#assuming Chrome is installed on localhost...if not, just remove "Google Chrome" and default browser will be opened
+open -a "Google Chrome" http://localhost:8000/couchmovies.html
